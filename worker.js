@@ -1,0 +1,41 @@
+// worker.js
+import { pipeline, env } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.14.0';
+
+env.allowLocalModels = false;
+env.useBrowserCache = true;
+
+class ObjectDetectionPipeline {
+    static task = 'object-detection';
+    static model = 'Xenova/detr-resnet-50';
+    static instance = null;
+
+    static async getInstance(progress_callback = null) {
+        if (this.instance === null) {
+            this.instance = await pipeline(this.task, this.model, { quantized: true, progress_callback });
+        }
+        return this.instance;
+    }
+}
+
+self.addEventListener('message', async (event) => {
+    // Nhận ImageBitmap trực tiếp từ main thread (hiệu năng cao hơn blob/url)
+    const { image, status } = event.data;
+
+    if (status === 'predict') {
+        try {
+            const detector = await ObjectDetectionPipeline.getInstance((data) => {
+                self.postMessage({ status: 'loading', data });
+            });
+
+            // Inference
+            const output = await detector(image, { threshold: 0.8, percentage: true });
+
+            // ImageBitmap cần được đóng thủ công để giải phóng RAM sau khi dùng xong
+            if (image && typeof image.close === 'function') image.close();
+
+            self.postMessage({ status: 'complete', output });
+        } catch (e) {
+            self.postMessage({ status: 'error', data: e.toString() });
+        }
+    }
+});
