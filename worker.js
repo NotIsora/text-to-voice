@@ -1,8 +1,15 @@
 // worker.js
 import { pipeline, env } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.14.0';
 
+// 1. Tắt load model từ local (GitHub Pages không có file model cục bộ)
 env.allowLocalModels = false;
+
+// 2. Sử dụng cache của trình duyệt để lần sau load nhanh hơn
 env.useBrowserCache = true;
+
+// 3. [FIX QUAN TRỌNG] Tắt Multi-threading để chạy được trên GitHub Pages
+// Vì GitHub Pages không có headers COOP/COEP, ta phải ép chạy đơn luồng (số luồng = 1)
+env.backends.onnx.wasm.numThreads = 1;;
 
 class ObjectDetectionPipeline {
     static task = 'object-detection';
@@ -38,4 +45,5 @@ self.addEventListener('message', async (event) => {
             self.postMessage({ status: 'error', data: e.toString() });
         }
     }
+
 });
