@@ -1,13 +1,12 @@
 // worker.js
 import { pipeline, env } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.14.0';
 
-// Cấu hình môi trường
 env.allowLocalModels = false;
 env.useBrowserCache = true;
 
-// --- [FIX QUAN TRỌNG CHO GITHUB PAGES] ---
-// Tắt tính năng đa luồng vì GitHub Pages không hỗ trợ headers bảo mật cho SharedArrayBuffer
-env.backends.onnx.wasm.numThreads = 1; 
+// --- [FIX BẮT BUỘC] ---
+// Tắt đa luồng để chạy được trên GitHub Pages (tránh lỗi SharedArrayBuffer)
+env.backends.onnx.wasm.numThreads = 1;
 // -----------------------------------------
 
 class ObjectDetectionPipeline {
@@ -61,5 +60,6 @@ self.addEventListener('message', async (event) => {
 }
 
 });
+
 
 
