@@ -44,7 +44,7 @@
     <script type="module">
         import { pipeline, env } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.14.0';
 
-        // Tối ưu hóa: Bỏ qua kiểm tra local để load nhanh từ CDN
+        // Tối ưu hóa: Bỏ qua kiểm tra local
         env.allowLocalModels = false;
         env.useBrowserCache = true;
 
@@ -52,29 +52,38 @@
         const btn = document.getElementById('generate-btn');
         const audioPlayer = document.getElementById('audio-player');
         
-        let synthesizer = await pipeline('text-to-speech', 'Xenova/mms-tts-vie');
+        // FIX 1: Để null ban đầu, không khởi tạo ngay
+        let synthesizer = null;
         let speaker_embeddings = null;
 
-        // URL chứa vector đặc trưng giọng nói (cmu_us_slt_arctic - giọng nữ US)
+        // URL vector giọng nói
         const SPEAKER_EMBEDDING_URL = 'https://huggingface.co/datasets/Xenova/transformers.js-docs/resolve/main/speaker_embeddings.json';
 
         async function loadModel() {
+            // Chỉ load nếu chưa có
             if (!synthesizer) {
                 status.textContent = "Loading SpeechT5 Model (Quantized)...";
                 btn.disabled = true;
                 
-                // Khởi tạo pipeline Text-to-Speech
-                synthesizer = await pipeline('text-to-speech', 'Xenova/speecht5_tts', { quantized: true });
-                
-                // Load Speaker Embeddings (để định hình giọng nói)
-                status.textContent = "Loading Speaker Embeddings...";
-                const response = await fetch(SPEAKER_EMBEDDING_URL);
-                const data = await response.json();
-                speaker_embeddings = data['cmu_us_slt_arctic-wav-arctic_a0001']; 
-                // Có thể thay đổi key khác trong file json để đổi giọng
+                try {
+                    // FIX 2: Sử dụng đúng model SpeechT5 cho kiến trúc này
+                    synthesizer = await pipeline('text-to-speech', 'Xenova/speecht5_tts', { quantized: true });
+                    
+                    status.textContent = "Loading Speaker Embeddings...";
+                    const response = await fetch(SPEAKER_EMBEDDING_URL);
+                    const data = await response.json();
+                    
+                    // FIX 3: Lấy đúng vector giọng nữ (cmu_us_slt_arctic)
+                    speaker_embeddings = data['cmu_us_slt_arctic-wav-arctic_a0001']; 
 
-                status.textContent = "Model Ready.";
-                btn.disabled = false;
+                    status.textContent = "Model Ready. Click Generate!";
+                    console.log("Model and Embeddings loaded successfully");
+                } catch (e) {
+                    status.textContent = "Error loading model: " + e.message;
+                    console.error(e);
+                } finally {
+                    btn.disabled = false;
+                }
             }
         }
 
@@ -82,35 +91,33 @@
             const text = document.getElementById('text-input').value;
             if (!text) return;
 
+            // Đảm bảo model đã load
             await loadModel();
 
             btn.disabled = true;
-            status.textContent = "Synthesizing... (Forward Pass)";
+            status.textContent = "Synthesizing...";
             
             try {
-                // Inference: Chạy model
-                // Input: Text + Speaker Vector
+                // Inference
                 const output = await synthesizer(text, { speaker_embeddings });
 
-                // Output trả về là Float32Array (Raw Waveform)
-                // Cần convert sang WAV blob để trình duyệt phát được
+                // Xử lý Audio Output
                 createAudioUrl(output.audio, output.sampling_rate);
 
-                status.textContent = "Done.";
+                status.textContent = "Done. Playing audio.";
             } catch (err) {
-                console.error(err);
+                console.error("Synthesis Error:", err);
                 status.textContent = "Error: " + err.message;
             } finally {
                 btn.disabled = false;
             }
         };
 
-        // Hàm helper: Convert Float32Array -> WAV Blob URL
+        // Hàm tạo file WAV từ Float32Array (Giữ nguyên logic xử lý nhị phân)
         function createAudioUrl(audioData, sampleRate) {
             const buffer = new ArrayBuffer(44 + audioData.length * 2);
             const view = new DataView(buffer);
 
-            // Ghi WAV Header (RIFF, fmt, data chunks) - Kỹ thuật xử lý Binary chuẩn
             const writeString = (view, offset, string) => {
                 for (let i = 0; i < string.length; i++) view.setUint8(offset + i, string.charCodeAt(i));
             };
@@ -129,7 +136,6 @@
             writeString(view, 36, 'data');
             view.setUint32(40, audioData.length * 2, true);
 
-            // Convert Float32 (-1.0 to 1.0) to Int16 (PCM)
             for (let i = 0; i < audioData.length; i++) {
                 let s = Math.max(-1, Math.min(1, audioData[i]));
                 view.setInt16(44 + i * 2, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
@@ -140,8 +146,9 @@
             
             audioPlayer.src = url;
             audioPlayer.style.display = 'block';
-            audioPlayer.play();
+            audioPlayer.play().catch(e => console.error("Auto-play blocked:", e));
         }
     </script>
 </body>
 </html>
+
