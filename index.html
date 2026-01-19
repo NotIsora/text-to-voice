@@ -3,127 +3,133 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Transformers.js Text-to-Speech</title>
+    <title>Optimized AI TTS</title>
     <style>
         body { font-family: 'Segoe UI', sans-serif; background: #111; color: #eee; display: flex; flex-direction: column; align-items: center; padding: 40px; }
-        h1 { font-weight: 300; letter-spacing: 1px; }
-        .container { background: #222; padding: 30px; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); width: 100%; max-width: 600px; }
+        .container { background: #222; padding: 30px; border-radius: 12px; width: 100%; max-width: 600px; }
         
-        textarea { width: 100%; height: 100px; background: #333; border: 1px solid #444; color: white; padding: 10px; border-radius: 6px; font-size: 16px; resize: none; margin-bottom: 20px; }
-        textarea:focus { outline: none; border-color: #00ff88; }
+        textarea { width: 100%; height: 100px; background: #333; border: 1px solid #444; color: white; padding: 10px; border-radius: 6px; margin-bottom: 20px; }
         
-        button { background: #00ff88; color: #000; border: none; padding: 12px 24px; font-size: 16px; font-weight: bold; border-radius: 6px; cursor: pointer; transition: transform 0.1s; width: 100%; }
-        button:hover { background: #00cc6a; }
-        button:active { transform: scale(0.98); }
-        button:disabled { background: #555; cursor: not-allowed; }
+        button { background: #00ff88; color: #000; border: none; padding: 12px; font-weight: bold; border-radius: 6px; cursor: pointer; width: 100%; }
+        button:disabled { background: #555; cursor: wait; opacity: 0.7; }
 
-        .status { margin-top: 15px; font-size: 14px; color: #aaa; text-align: center; height: 20px; }
-        audio { margin-top: 20px; width: 100%; display: none; }
+        /* Progress Bar Styles */
+        .progress-container { margin-top: 15px; width: 100%; background: #333; border-radius: 4px; height: 10px; overflow: hidden; display: none; }
+        .progress-bar { height: 100%; background: #00ff88; width: 0%; transition: width 0.2s; }
         
-        .math-note { margin-top: 30px; font-size: 0.85em; color: #777; border-top: 1px solid #333; padding-top: 10px; }
+        .status { margin-top: 10px; font-size: 13px; color: #aaa; text-align: center; }
     </style>
 </head>
 <body>
 
-    <h1>AI Text-to-Speech</h1>
+    <h1>AI Text-to-Speech (Optimized)</h1>
     <div class="container">
-        <textarea id="text-input" placeholder="Enter text here (English works best with SpeechT5)...">Hello, I am a neural network running entirely in your browser.</textarea>
+        <textarea id="text-input">Hello, this model is pre-loaded for better performance.</textarea>
         
-        <button id="generate-btn" onclick="generateSpeech()">Generate Audio</button>
+        <button id="generate-btn" onclick="generateSpeech()" disabled>Loading Model...</button>
         
-        <div id="status" class="status">Ready to load model...</div>
-        <audio id="audio-player" controls></audio>
-    </div>
-
-    <div class="math-note">
-        Architecture: SpeechT5 (Transformer) + HiFi-GAN Vocoder<br>
-        Precision: Quantized INT8 (ONNX Runtime)<br>
-        Task: Mel-Spectrogram Regression &rarr; Waveform Synthesis
+        <div id="progress-container" class="progress-container">
+            <div id="progress-bar" class="progress-bar"></div>
+        </div>
+        <div id="status" class="status">Initializing...</div>
+        
+        <audio id="audio-player" controls style="width: 100%; margin-top: 20px; display: none;"></audio>
     </div>
 
     <script type="module">
         import { pipeline, env } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.14.0';
 
-        // Tối ưu hóa: Bỏ qua kiểm tra local
-        env.allowLocalModels = false;
+        // 1. Force Cache: Lần tải thứ 2 sẽ tức thì
         env.useBrowserCache = true;
+        env.allowLocalModels = false;
 
         const status = document.getElementById('status');
         const btn = document.getElementById('generate-btn');
+        const progressBar = document.getElementById('progress-bar');
+        const progressContainer = document.getElementById('progress-container');
         const audioPlayer = document.getElementById('audio-player');
-        
-        // FIX 1: Để null ban đầu, không khởi tạo ngay
+
         let synthesizer = null;
         let speaker_embeddings = null;
+        
+        // URL giọng đọc (Cached)
+        const SPEAKER_URL = 'https://huggingface.co/datasets/Xenova/transformers.js-docs/resolve/main/speaker_embeddings.json';
 
-        // URL vector giọng nói
-        const SPEAKER_EMBEDDING_URL = 'https://huggingface.co/datasets/Xenova/transformers.js-docs/resolve/main/speaker_embeddings.json';
+        // 2. Pre-load Function: Chạy ngay khi mở web
+        async function preloadModel() {
+            progressContainer.style.display = 'block';
+            status.textContent = "Downloading AI Model (Client-side)...";
 
-        async function loadModel() {
-            // Chỉ load nếu chưa có
-            if (!synthesizer) {
-                status.textContent = "Loading SpeechT5 Model (Quantized)...";
-                btn.disabled = true;
-                
-                try {
-                    // FIX 2: Sử dụng đúng model SpeechT5 cho kiến trúc này
-                    synthesizer = await pipeline('text-to-speech', 'Xenova/speecht5_tts', { quantized: true });
-                    
-                    status.textContent = "Loading Speaker Embeddings...";
-                    const response = await fetch(SPEAKER_EMBEDDING_URL);
-                    const data = await response.json();
-                    
-                    // FIX 3: Lấy đúng vector giọng nữ (cmu_us_slt_arctic)
-                    speaker_embeddings = data['cmu_us_slt_arctic-wav-arctic_a0001']; 
+            try {
+                // Tải model với Callback theo dõi tiến độ
+                synthesizer = await pipeline('text-to-speech', 'Xenova/speecht5_tts', {
+                    quantized: true, // Bắt buộc dùng Quantized để nhẹ (40MB vs 150MB)
+                    progress_callback: (data) => {
+                        // Cập nhật thanh loading
+                        if (data.status === 'progress') {
+                            const percent = Math.round(data.progress || 0);
+                            progressBar.style.width = percent + '%';
+                            status.textContent = `Downloading ${data.file}: ${percent}%`;
+                        }
+                    }
+                });
 
-                    status.textContent = "Model Ready. Click Generate!";
-                    console.log("Model and Embeddings loaded successfully");
-                } catch (e) {
-                    status.textContent = "Error loading model: " + e.message;
-                    console.error(e);
-                } finally {
-                    btn.disabled = false;
-                }
+                // Tải Embeddings song song hoặc ngay sau
+                status.textContent = "Loading Voice Profiles...";
+                const response = await fetch(SPEAKER_URL);
+                const speakerData = await response.json();
+                speaker_embeddings = speakerData['cmu_us_slt_arctic-wav-arctic_a0001'];
+
+                // Hoàn tất
+                status.textContent = "System Ready.";
+                status.style.color = "#00ff88";
+                progressContainer.style.display = 'none';
+                btn.disabled = false;
+                btn.textContent = "Generate Audio";
+
+            } catch (err) {
+                status.textContent = "Error: " + err.message;
+                status.style.color = "red";
             }
         }
 
+        // 3. Tự động kích hoạt Pre-load
+        window.addEventListener('DOMContentLoaded', preloadModel);
+
         window.generateSpeech = async function() {
             const text = document.getElementById('text-input').value;
-            if (!text) return;
-
-            // Đảm bảo model đã load
-            await loadModel();
+            if (!text || !synthesizer) return;
 
             btn.disabled = true;
-            status.textContent = "Synthesizing...";
+            btn.textContent = "Synthesizing...";
             
             try {
                 // Inference
                 const output = await synthesizer(text, { speaker_embeddings });
-
-                // Xử lý Audio Output
-                createAudioUrl(output.audio, output.sampling_rate);
-
-                status.textContent = "Done. Playing audio.";
+                
+                // Play Audio
+                const wavUrl = createWavUrl(output.audio, output.sampling_rate);
+                audioPlayer.src = wavUrl;
+                audioPlayer.style.display = 'block';
+                await audioPlayer.play();
+                
             } catch (err) {
-                console.error("Synthesis Error:", err);
-                status.textContent = "Error: " + err.message;
+                console.error(err);
             } finally {
                 btn.disabled = false;
+                btn.textContent = "Generate Audio";
             }
         };
 
-        // Hàm tạo file WAV từ Float32Array (Giữ nguyên logic xử lý nhị phân)
-        function createAudioUrl(audioData, sampleRate) {
-            const buffer = new ArrayBuffer(44 + audioData.length * 2);
+        // Hàm tạo file WAV (Helper)
+        function createWavUrl(audio, sampleRate) {
+            const buffer = new ArrayBuffer(44 + audio.length * 2);
             const view = new DataView(buffer);
-
             const writeString = (view, offset, string) => {
                 for (let i = 0; i < string.length; i++) view.setUint8(offset + i, string.charCodeAt(i));
             };
-
             writeString(view, 0, 'RIFF');
-            view.setUint32(4, 36 + audioData.length * 2, true);
+            view.setUint32(4, 36 + audio.length * 2, true);
             writeString(view, 8, 'WAVE');
             writeString(view, 12, 'fmt ');
             view.setUint32(16, 16, true);
@@ -134,21 +140,13 @@
             view.setUint16(32, 2, true);
             view.setUint16(34, 16, true);
             writeString(view, 36, 'data');
-            view.setUint32(40, audioData.length * 2, true);
-
-            for (let i = 0; i < audioData.length; i++) {
-                let s = Math.max(-1, Math.min(1, audioData[i]));
+            view.setUint32(40, audio.length * 2, true);
+            for (let i = 0; i < audio.length; i++) {
+                let s = Math.max(-1, Math.min(1, audio[i]));
                 view.setInt16(44 + i * 2, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
             }
-
-            const blob = new Blob([view], { type: 'audio/wav' });
-            const url = URL.createObjectURL(blob);
-            
-            audioPlayer.src = url;
-            audioPlayer.style.display = 'block';
-            audioPlayer.play().catch(e => console.error("Auto-play blocked:", e));
+            return URL.createObjectURL(new Blob([view], { type: 'audio/wav' }));
         }
     </script>
 </body>
 </html>
-
