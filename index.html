@@ -3,138 +3,145 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Transformers.js Object Detection</title>
+    <title>Transformers.js Text-to-Speech</title>
     <style>
-        body { font-family: 'Segoe UI', sans-serif; background: #1a1a1a; color: white; display: flex; flex-direction: column; align-items: center; padding: 20px; }
-        h1 { margin-bottom: 10px; }
-        #container { position: relative; width: 640px; height: 480px; border: 2px solid #333; border-radius: 8px; overflow: hidden; background: #000; box-shadow: 0 0 20px rgba(0,0,0,0.5); }
-        video { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; }
-        canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; }
-        #status { margin-top: 15px; color: #00ff88; font-weight: bold; }
-        .loading { color: #ffcc00; }
+        body { font-family: 'Segoe UI', sans-serif; background: #111; color: #eee; display: flex; flex-direction: column; align-items: center; padding: 40px; }
+        h1 { font-weight: 300; letter-spacing: 1px; }
+        .container { background: #222; padding: 30px; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); width: 100%; max-width: 600px; }
+        
+        textarea { width: 100%; height: 100px; background: #333; border: 1px solid #444; color: white; padding: 10px; border-radius: 6px; font-size: 16px; resize: none; margin-bottom: 20px; }
+        textarea:focus { outline: none; border-color: #00ff88; }
+        
+        button { background: #00ff88; color: #000; border: none; padding: 12px 24px; font-size: 16px; font-weight: bold; border-radius: 6px; cursor: pointer; transition: transform 0.1s; width: 100%; }
+        button:hover { background: #00cc6a; }
+        button:active { transform: scale(0.98); }
+        button:disabled { background: #555; cursor: not-allowed; }
+
+        .status { margin-top: 15px; font-size: 14px; color: #aaa; text-align: center; height: 20px; }
+        audio { margin-top: 20px; width: 100%; display: none; }
+        
+        .math-note { margin-top: 30px; font-size: 0.85em; color: #777; border-top: 1px solid #333; padding-top: 10px; }
     </style>
 </head>
 <body>
 
-    <h1>Real-time Object Detection</h1>
-    <p>Architecture: DETR (ResNet-50) | Engine: Transformers.js (ONNX/WASM)</p>
-
-    <div id="container">
-        <video id="video" autoplay playsinline muted></video>
-        <canvas id="canvas"></canvas>
+    <h1>AI Text-to-Speech</h1>
+    <div class="container">
+        <textarea id="text-input" placeholder="Enter text here (English works best with SpeechT5)...">Hello, I am a neural network running entirely in your browser.</textarea>
+        
+        <button id="generate-btn" onclick="generateSpeech()">Generate Audio</button>
+        
+        <div id="status" class="status">Ready to load model...</div>
+        <audio id="audio-player" controls></audio>
     </div>
-    <div id="status" class="loading">Loading Model (Quantized)...</div>
+
+    <div class="math-note">
+        Architecture: SpeechT5 (Transformer) + HiFi-GAN Vocoder<br>
+        Precision: Quantized INT8 (ONNX Runtime)<br>
+        Task: Mel-Spectrogram Regression &rarr; Waveform Synthesis
+    </div>
 
     <script type="module">
         import { pipeline, env } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.14.0';
 
-        // Optimization: Skip local model checks to force CDN usage & use quantized models
+        // Tối ưu hóa: Bỏ qua kiểm tra local để load nhanh từ CDN
         env.allowLocalModels = false;
         env.useBrowserCache = true;
 
-        const video = document.getElementById('video');
-        const canvas = document.getElementById('canvas');
-        const ctx = canvas.getContext('2d');
         const status = document.getElementById('status');
-
-        let detector;
+        const btn = document.getElementById('generate-btn');
+        const audioPlayer = document.getElementById('audio-player');
         
-        // 1. Initialize the Pipeline
-        async function init() {
-            try {
-                // Sử dụng model DETR phiên bản ResNet-50
-                // task: 'object-detection'
-                detector = await pipeline('object-detection', 'Xenova/detr-resnet-50');
+        let synthesizer = await pipeline('text-to-speech', 'Xenova/mms-tts-vie');
+        let speaker_embeddings = null;
+
+        // URL chứa vector đặc trưng giọng nói (cmu_us_slt_arctic - giọng nữ US)
+        const SPEAKER_EMBEDDING_URL = 'https://huggingface.co/datasets/Xenova/transformers.js-docs/resolve/main/speaker_embeddings.json';
+
+        async function loadModel() {
+            if (!synthesizer) {
+                status.textContent = "Loading SpeechT5 Model (Quantized)...";
+                btn.disabled = true;
                 
-                status.textContent = "Model Loaded. Starting Camera...";
-                status.className = "";
-                startCamera();
-            } catch (error) {
-                status.textContent = "Error loading model: " + error.message;
-                status.style.color = "red";
+                // Khởi tạo pipeline Text-to-Speech
+                synthesizer = await pipeline('text-to-speech', 'Xenova/speecht5_tts', { quantized: true });
+                
+                // Load Speaker Embeddings (để định hình giọng nói)
+                status.textContent = "Loading Speaker Embeddings...";
+                const response = await fetch(SPEAKER_EMBEDDING_URL);
+                const data = await response.json();
+                speaker_embeddings = data['cmu_us_slt_arctic-wav-arctic_a0001']; 
+                // Có thể thay đổi key khác trong file json để đổi giọng
+
+                status.textContent = "Model Ready.";
+                btn.disabled = false;
             }
         }
 
-        // 2. Setup Webcam
-        async function startCamera() {
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({ 
-                    video: { 
-                        facingMode: 'environment',
-                        width: { ideal: 640 },
-                        height: { ideal: 480 }
-                    } 
-                });
-                video.srcObject = stream;
-                video.onloadedmetadata = () => {
-                    canvas.width = video.videoWidth;
-                    canvas.height = video.videoHeight;
-                    detectFrame(); // Start prediction loop
-                };
-            } catch (err) {
-                status.textContent = "Camera Access Denied";
-            }
-        }
+        window.generateSpeech = async function() {
+            const text = document.getElementById('text-input').value;
+            if (!text) return;
 
-        // 3. Main Detection Loop
-        async function detectFrame() {
-            if (!video.paused && !video.ended) {
-                const startTime = performance.now();
+            await loadModel();
 
-                // Inference: Truyền trực tiếp video element vào pipeline
-                // threshold: 0.5 (chỉ hiện vật thể có độ tin cậy > 50%)
-                const output = await detector(video, { threshold: 0.5, percentage: true });
-
-                // Render kết quả
-                renderBoxes(output);
-
-                const endTime = performance.now();
-                const fps = 1000 / (endTime - startTime);
-                
-                // Cập nhật status
-                status.textContent = `Running... (${Math.round(fps)} FPS)`;
-                
-                // Loop lại bằng requestAnimationFrame
-                requestAnimationFrame(detectFrame);
-            }
-        }
-
-        // 4. Visualization
-        function renderBoxes(predictions) {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            btn.disabled = true;
+            status.textContent = "Synthesizing... (Forward Pass)";
             
-            predictions.forEach(prediction => {
-                const { box, label, score } = prediction;
-                const { xmin, ymin, xmax, ymax } = box;
+            try {
+                // Inference: Chạy model
+                // Input: Text + Speaker Vector
+                const output = await synthesizer(text, { speaker_embeddings });
 
-                // Quy đổi tọa độ từ percentage sang pixel
-                const x = xmin * canvas.width;
-                const y = ymin * canvas.height;
-                const w = (xmax - xmin) * canvas.width;
-                const h = (ymax - ymin) * canvas.height;
+                // Output trả về là Float32Array (Raw Waveform)
+                // Cần convert sang WAV blob để trình duyệt phát được
+                createAudioUrl(output.audio, output.sampling_rate);
 
-                // Vẽ Bounding Box
-                ctx.strokeStyle = '#00FF00';
-                ctx.lineWidth = 2;
-                ctx.strokeRect(x, y, w, h);
+                status.textContent = "Done.";
+            } catch (err) {
+                console.error(err);
+                status.textContent = "Error: " + err.message;
+            } finally {
+                btn.disabled = false;
+            }
+        };
 
-                // Vẽ Label background
-                ctx.fillStyle = '#00FF00';
-                ctx.globalAlpha = 0.8;
-                const text = `${label} ${Math.round(score * 100)}%`;
-                const width = ctx.measureText(text).width;
-                ctx.fillRect(x, y, width + 10, 20);
+        // Hàm helper: Convert Float32Array -> WAV Blob URL
+        function createAudioUrl(audioData, sampleRate) {
+            const buffer = new ArrayBuffer(44 + audioData.length * 2);
+            const view = new DataView(buffer);
 
-                // Vẽ Text
-                ctx.globalAlpha = 1.0;
-                ctx.fillStyle = '#000000';
-                ctx.font = '14px Arial';
-                ctx.fillText(text, x + 5, y + 15);
-            });
+            // Ghi WAV Header (RIFF, fmt, data chunks) - Kỹ thuật xử lý Binary chuẩn
+            const writeString = (view, offset, string) => {
+                for (let i = 0; i < string.length; i++) view.setUint8(offset + i, string.charCodeAt(i));
+            };
+
+            writeString(view, 0, 'RIFF');
+            view.setUint32(4, 36 + audioData.length * 2, true);
+            writeString(view, 8, 'WAVE');
+            writeString(view, 12, 'fmt ');
+            view.setUint32(16, 16, true);
+            view.setUint16(20, 1, true);
+            view.setUint16(22, 1, true);
+            view.setUint32(24, sampleRate, true);
+            view.setUint32(28, sampleRate * 2, true);
+            view.setUint16(32, 2, true);
+            view.setUint16(34, 16, true);
+            writeString(view, 36, 'data');
+            view.setUint32(40, audioData.length * 2, true);
+
+            // Convert Float32 (-1.0 to 1.0) to Int16 (PCM)
+            for (let i = 0; i < audioData.length; i++) {
+                let s = Math.max(-1, Math.min(1, audioData[i]));
+                view.setInt16(44 + i * 2, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+            }
+
+            const blob = new Blob([view], { type: 'audio/wav' });
+            const url = URL.createObjectURL(blob);
+            
+            audioPlayer.src = url;
+            audioPlayer.style.display = 'block';
+            audioPlayer.play();
         }
-
-        // Khởi chạy
-        init();
     </script>
 </body>
 </html>
