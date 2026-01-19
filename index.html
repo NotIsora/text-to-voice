@@ -2,31 +2,139 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Real-time Object Detection</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Transformers.js Object Detection</title>
     <style>
-        body { font-family: sans-serif; display: flex; flex-direction: column; align-items: center; background: #f0f0f0; }
-        .container { position: relative; margin-top: 20px; box-shadow: 0 4px 8px rgba(0,0,0,0.2); }
-        
-        /* Video ẩn đi, ta chỉ render lên Canvas */
-        video { display: none; } 
-        canvas { max-width: 100%; display: block; background: #000; }
-        
-        #status { margin: 10px; font-weight: bold; }
-        button { padding: 10px 20px; font-size: 16px; cursor: pointer; background: #007bff; color: white; border: none; border-radius: 5px; }
-        button:hover { background: #0056b3; }
+        body { font-family: 'Segoe UI', sans-serif; background: #1a1a1a; color: white; display: flex; flex-direction: column; align-items: center; padding: 20px; }
+        h1 { margin-bottom: 10px; }
+        #container { position: relative; width: 640px; height: 480px; border: 2px solid #333; border-radius: 8px; overflow: hidden; background: #000; box-shadow: 0 0 20px rgba(0,0,0,0.5); }
+        video { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; }
+        canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; }
+        #status { margin-top: 15px; color: #00ff88; font-weight: bold; }
+        .loading { color: #ffcc00; }
     </style>
 </head>
 <body>
 
-    <h2>Real-time Object Detection (WebGPU/WASM)</h2>
-    <div id="status">Ready. Click Start.</div>
-    <button id="btn-start">Start Webcam</button>
+    <h1>Real-time Object Detection</h1>
+    <p>Architecture: DETR (ResNet-50) | Engine: Transformers.js (ONNX/WASM)</p>
 
-    <div class="container">
-        <video id="webcam" autoplay playsinline muted></video>
-        <canvas id="output-canvas"></canvas>
+    <div id="container">
+        <video id="video" autoplay playsinline muted></video>
+        <canvas id="canvas"></canvas>
     </div>
+    <div id="status" class="loading">Loading Model (Quantized)...</div>
 
-    <script type="module" src="main.js"></script>
+    <script type="module">
+        import { pipeline, env } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.14.0';
+
+        // Optimization: Skip local model checks to force CDN usage & use quantized models
+        env.allowLocalModels = false;
+        env.useBrowserCache = true;
+
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const status = document.getElementById('status');
+
+        let detector;
+        
+        // 1. Initialize the Pipeline
+        async function init() {
+            try {
+                // Sử dụng model DETR phiên bản ResNet-50
+                // task: 'object-detection'
+                detector = await pipeline('object-detection', 'Xenova/detr-resnet-50');
+                
+                status.textContent = "Model Loaded. Starting Camera...";
+                status.className = "";
+                startCamera();
+            } catch (error) {
+                status.textContent = "Error loading model: " + error.message;
+                status.style.color = "red";
+            }
+        }
+
+        // 2. Setup Webcam
+        async function startCamera() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { 
+                        facingMode: 'environment',
+                        width: { ideal: 640 },
+                        height: { ideal: 480 }
+                    } 
+                });
+                video.srcObject = stream;
+                video.onloadedmetadata = () => {
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+                    detectFrame(); // Start prediction loop
+                };
+            } catch (err) {
+                status.textContent = "Camera Access Denied";
+            }
+        }
+
+        // 3. Main Detection Loop
+        async function detectFrame() {
+            if (!video.paused && !video.ended) {
+                const startTime = performance.now();
+
+                // Inference: Truyền trực tiếp video element vào pipeline
+                // threshold: 0.5 (chỉ hiện vật thể có độ tin cậy > 50%)
+                const output = await detector(video, { threshold: 0.5, percentage: true });
+
+                // Render kết quả
+                renderBoxes(output);
+
+                const endTime = performance.now();
+                const fps = 1000 / (endTime - startTime);
+                
+                // Cập nhật status
+                status.textContent = `Running... (${Math.round(fps)} FPS)`;
+                
+                // Loop lại bằng requestAnimationFrame
+                requestAnimationFrame(detectFrame);
+            }
+        }
+
+        // 4. Visualization
+        function renderBoxes(predictions) {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            predictions.forEach(prediction => {
+                const { box, label, score } = prediction;
+                const { xmin, ymin, xmax, ymax } = box;
+
+                // Quy đổi tọa độ từ percentage sang pixel
+                const x = xmin * canvas.width;
+                const y = ymin * canvas.height;
+                const w = (xmax - xmin) * canvas.width;
+                const h = (ymax - ymin) * canvas.height;
+
+                // Vẽ Bounding Box
+                ctx.strokeStyle = '#00FF00';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(x, y, w, h);
+
+                // Vẽ Label background
+                ctx.fillStyle = '#00FF00';
+                ctx.globalAlpha = 0.8;
+                const text = `${label} ${Math.round(score * 100)}%`;
+                const width = ctx.measureText(text).width;
+                ctx.fillRect(x, y, width + 10, 20);
+
+                // Vẽ Text
+                ctx.globalAlpha = 1.0;
+                ctx.fillStyle = '#000000';
+                ctx.font = '14px Arial';
+                ctx.fillText(text, x + 5, y + 15);
+            });
+        }
+
+        // Khởi chạy
+        init();
+    </script>
 </body>
 </html>
