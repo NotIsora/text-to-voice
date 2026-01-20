@@ -1,127 +1,118 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="vi">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Optimized AI TTS</title>
+    <title>AI TTS Tiếng Việt (Fixed)</title>
     <style>
-        body { font-family: 'Segoe UI', sans-serif; background: #111; color: #eee; display: flex; flex-direction: column; align-items: center; padding: 40px; }
-        .container { background: #222; padding: 30px; border-radius: 12px; width: 100%; max-width: 600px; }
+        body { font-family: 'Segoe UI', sans-serif; background: #1a1a1a; color: #eee; display: flex; flex-direction: column; align-items: center; padding: 40px; }
+        .container { background: #2b2b2b; padding: 30px; border-radius: 12px; width: 100%; max-width: 600px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
         
-        textarea { width: 100%; height: 100px; background: #333; border: 1px solid #444; color: white; padding: 10px; border-radius: 6px; margin-bottom: 20px; }
+        textarea { width: 100%; height: 100px; background: #333; border: 1px solid #444; color: white; padding: 15px; border-radius: 6px; margin-bottom: 20px; font-size: 16px; resize: none; }
+        textarea:focus { outline: none; border-color: #00ff88; }
         
-        button { background: #00ff88; color: #000; border: none; padding: 12px; font-weight: bold; border-radius: 6px; cursor: pointer; width: 100%; }
-        button:disabled { background: #555; cursor: wait; opacity: 0.7; }
+        button { background: #00ff88; color: #000; border: none; padding: 12px; font-weight: bold; border-radius: 6px; cursor: pointer; width: 100%; font-size: 16px; transition: 0.2s; }
+        button:hover { background: #00cc6a; }
+        button:disabled { background: #555; cursor: not-allowed; opacity: 0.7; }
 
-        /* Progress Bar Styles */
-        .progress-container { margin-top: 15px; width: 100%; background: #333; border-radius: 4px; height: 10px; overflow: hidden; display: none; }
-        .progress-bar { height: 100%; background: #00ff88; width: 0%; transition: width 0.2s; }
+        .progress-bar { height: 6px; background: #00ff88; width: 0%; transition: width 0.2s; margin-top: 15px; border-radius: 3px; }
+        .status { margin-top: 10px; font-size: 13px; color: #aaa; text-align: center; min-height: 20px; }
         
-        .status { margin-top: 10px; font-size: 13px; color: #aaa; text-align: center; }
+        audio { width: 100%; margin-top: 20px; display: none; }
     </style>
 </head>
 <body>
 
-    <h1>AI Text-to-Speech (Optimized)</h1>
+    <h1>AI Đọc Tiếng Việt</h1>
     <div class="container">
-        <textarea id="text-input">Hello, this model is pre-loaded for better performance.</textarea>
+        <textarea id="text-input">Xin chào, tôi là trí tuệ nhân tạo chạy trực tiếp trên trình duyệt của bạn.</textarea>
         
-        <button id="generate-btn" onclick="generateSpeech()" disabled>Loading Model...</button>
+        <button id="generate-btn" onclick="generateSpeech()" disabled>Đang tải mô hình...</button>
         
-        <div id="progress-container" class="progress-container">
-            <div id="progress-bar" class="progress-bar"></div>
-        </div>
-        <div id="status" class="status">Initializing...</div>
+        <div class="progress-bar" id="progress-bar"></div>
+        <div id="status" class="status">Đang khởi tạo...</div>
         
-        <audio id="audio-player" controls style="width: 100%; margin-top: 20px; display: none;"></audio>
+        <audio id="audio-player" controls></audio>
     </div>
 
     <script type="module">
         import { pipeline, env } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.14.0';
 
-        // 1. Force Cache: Lần tải thứ 2 sẽ tức thì
+        // Tối ưu cache để lần sau load tức thì
         env.useBrowserCache = true;
         env.allowLocalModels = false;
 
         const status = document.getElementById('status');
         const btn = document.getElementById('generate-btn');
         const progressBar = document.getElementById('progress-bar');
-        const progressContainer = document.getElementById('progress-container');
         const audioPlayer = document.getElementById('audio-player');
 
         let synthesizer = null;
-        let speaker_embeddings = null;
-        
-        // URL giọng đọc (Cached)
-        const SPEAKER_URL = 'https://huggingface.co/datasets/Xenova/transformers.js-docs/resolve/main/speaker_embeddings.json';
 
-        // 2. Pre-load Function: Chạy ngay khi mở web
+        // Tự động tải model ngay khi mở trang
         async function preloadModel() {
-            progressContainer.style.display = 'block';
-            status.textContent = "Downloading AI Model (Client-side)...";
-
             try {
-                // Tải model với Callback theo dõi tiến độ
-                synthesizer = await pipeline('text-to-speech', 'Xenova/speecht5_tts', {
-                    quantized: true, // Bắt buộc dùng Quantized để nhẹ (40MB vs 150MB)
+                status.textContent = "Đang tải mô hình (Khoảng 20-30MB)...";
+                
+                // Sử dụng model Tiếng Việt: Xenova/mms-tts-vie
+                synthesizer = await pipeline('text-to-speech', 'Xenova/mms-tts-vie', {
+                    quantized: true, // Bản nhẹ
                     progress_callback: (data) => {
-                        // Cập nhật thanh loading
                         if (data.status === 'progress') {
                             const percent = Math.round(data.progress || 0);
                             progressBar.style.width = percent + '%';
-                            status.textContent = `Downloading ${data.file}: ${percent}%`;
+                            if(percent < 100) status.textContent = `Đang tải: ${percent}%`;
                         }
                     }
                 });
 
-                // Tải Embeddings song song hoặc ngay sau
-                status.textContent = "Loading Voice Profiles...";
-                const response = await fetch(SPEAKER_URL);
-                const speakerData = await response.json();
-                speaker_embeddings = speakerData['cmu_us_slt_arctic-wav-arctic_a0001'];
-
-                // Hoàn tất
-                status.textContent = "System Ready.";
+                status.textContent = "Sẵn sàng!";
                 status.style.color = "#00ff88";
-                progressContainer.style.display = 'none';
+                btn.textContent = "Đọc văn bản";
                 btn.disabled = false;
-                btn.textContent = "Generate Audio";
+                progressBar.style.width = '100%';
+                setTimeout(() => { progressBar.style.opacity = '0'; }, 1000);
 
             } catch (err) {
-                status.textContent = "Error: " + err.message;
+                console.error(err);
+                status.textContent = "Lỗi tải model: " + err.message;
                 status.style.color = "red";
             }
         }
 
-        // 3. Tự động kích hoạt Pre-load
-        window.addEventListener('DOMContentLoaded', preloadModel);
+        // Gọi hàm preload
+        preloadModel();
 
         window.generateSpeech = async function() {
             const text = document.getElementById('text-input').value;
             if (!text || !synthesizer) return;
 
             btn.disabled = true;
-            btn.textContent = "Synthesizing...";
-            
+            btn.textContent = "Đang xử lý...";
+            status.textContent = "Đang tạo âm thanh...";
+            status.style.color = "#aaa";
+
             try {
-                // Inference
-                const output = await synthesizer(text, { speaker_embeddings });
+                // Inference: KHÔNG cần speaker_embeddings nữa
+                const output = await synthesizer(text);
                 
-                // Play Audio
+                // Tạo file WAV và phát
                 const wavUrl = createWavUrl(output.audio, output.sampling_rate);
                 audioPlayer.src = wavUrl;
                 audioPlayer.style.display = 'block';
                 await audioPlayer.play();
-                
+                status.textContent = "Hoàn tất.";
+
             } catch (err) {
                 console.error(err);
+                status.textContent = "Lỗi: " + err.message;
             } finally {
                 btn.disabled = false;
-                btn.textContent = "Generate Audio";
+                btn.textContent = "Đọc văn bản";
             }
         };
 
-        // Hàm tạo file WAV (Helper)
+        // Hàm chuyển đổi Audio Buffer sang WAV (Helper)
         function createWavUrl(audio, sampleRate) {
             const buffer = new ArrayBuffer(44 + audio.length * 2);
             const view = new DataView(buffer);
