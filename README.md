@@ -1,31 +1,31 @@
-# AI Text-to-Speech Tiếng Việt (Browser-based)
+# Vietnamese AI Text-to-Speech (Browser-based)
 
-Dự án ứng dụng web đơn giản giúp chuyển đổi văn bản sang giọng nói (Text-to-Speech) Tiếng Việt, chạy hoàn toàn trên trình duyệt sử dụng công nghệ AI (Deep Learning).
+A lightweight web application that converts Vietnamese text into speech using Deep Learning. This project runs entirely in the browser using **Transformers.js**, meaning no backend server is required to process the audio.
 
-> **Tác giả:** Nguyễn Lê Thái Dương & Đoàn Thiên An (12CTin)
+> **Authors:** Nguyễn Lê Thái Dương & Đoàn Thiên An (Class 12CTin)
 
 ![Badge](https://img.shields.io/badge/Status-Active-success)
 ![Badge](https://img.shields.io/badge/Language-Vietnamese-red)
 ![Badge](https://img.shields.io/badge/Tech-Transformers.js-yellow)
 
-## ✨ Tính năng nổi bật
+## ✨ Key Features
 
-* **Chạy cục bộ trên trình duyệt:** Không cần Backend server, không gửi dữ liệu đi đâu (Privacy focused).
-* **Mô hình AI:** Sử dụng model `Xenova/mms-tts-vie` từ Hugging Face, hỗ trợ phát âm Tiếng Việt tự nhiên.
-* **Tối ưu hiệu năng:** Sử dụng bản Quantized (nén lượng tử) giúp tải nhanh và nhẹ (khoảng 20-30MB).
-* **Giao diện:** Dark mode hiện đại, có thanh tiến trình tải model.
-* **Định dạng:** Tự động tạo và phát file `.wav`.
+* **100% Client-Side:** Runs locally in your browser. No data is sent to any server (Privacy-focused).
+* **AI Model:** Powered by the `Xenova/mms-tts-vie` model (Massively Multilingual Speech) from Hugging Face.
+* **Optimized Performance:** Uses a quantized version of the model (~20-30MB) for faster loading and low memory usage.
+* **Modern UI:** Dark mode interface with a real-time model loading progress bar.
+* **Audio Generation:** Automatically converts raw audio data into a playable `.wav` file.
 
-## 🚀 Hướng dẫn cài đặt & Chạy
+## 🚀 Installation & Usage
 
-Do dự án sử dụng **ES Modules** (`import ... from ...`), bạn **không thể** chạy bằng cách click đúp vào file HTML (lỗi `file://` protocol CORS policy). Bạn cần dựng một server local đơn giản.
+Since this project uses **ES Modules** (`import ... from ...`), you **cannot** simply double-click the `index.html` file to run it (due to CORS policy restrictions on the `file://` protocol). You must use a local server.
 
-### Cách 1: Dùng VS Code (Khuyên dùng)
-1. Cài đặt Extension **Live Server** trong VS Code.
-2. Mở file `index.html`.
-3. Nhấn chuột phải chọn **"Open with Live Server"**.
+### Option 1: VS Code (Recommended)
+1.  Install the **Live Server** extension in Visual Studio Code.
+2.  Open `index.html`.
+3.  Right-click anywhere in the code and select **"Open with Live Server"**.
 
-### Cách 2: Dùng Python
-Nếu đã cài Python, mở terminal tại thư mục chứa file và chạy:
+### Option 2: Python
+If you have Python installed, open your terminal in the project folder and run:
 ```bash
 python -m http.server 8000
