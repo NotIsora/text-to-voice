@@ -1,136 +1,171 @@
-<!DOCTYPE html>
-<html lang="vi">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI TTS Tiếng Việt - 12CTin</title>
-    <link rel="stylesheet" href="style.css">
-</head>
-<body>
+/* Import font chữ đẹp từ Google Fonts */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
 
-    <h1>AI Đọc Tiếng Việt 🇻🇳</h1>
-    
-    <div class="container">
-        <label for="text-input">Nhập văn bản cần đọc:</label>
-        <textarea id="text-input" placeholder="Nhập nội dung vào đây...">Xin chào, tôi là trí tuệ nhân tạo chuyển đổi văn bản thành âm thanh do Nguyễn Lê Thái Dương và Đoàn Thiên An của 12CTin thực hiện.</textarea>
-        
-        <button id="generate-btn" onclick="generateSpeech()" disabled>
-            Đang tải mô hình...
-        </button>
-        
-        <div class="progress-container">
-            <div class="progress-bar" id="progress-bar"></div>
-        </div>
-        <div id="status" class="status">Đang khởi tạo hệ thống...</div>
-        
-        <audio id="audio-player" controls></audio>
-    </div>
+:root {
+    --primary-color: #00ffa3; /* Màu xanh neon chủ đạo */
+    --primary-hover: #00cc83;
+    --bg-color: #121212;
+    --card-bg: #1e1e1e;
+    --text-color: #e0e0e0;
+    --border-color: #333;
+    --shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+}
 
-    <script type="module">
-        import { pipeline, env } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.14.0';
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
 
-        // Tối ưu cache
-        env.useBrowserCache = true;
-        env.allowLocalModels = false;
+body {
+    font-family: 'Inter', sans-serif;
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    padding: 20px;
+    /* Thêm hình nền mờ ảo cho đẹp (optional) */
+    background-image: radial-gradient(circle at 10% 20%, rgba(0, 255, 163, 0.05) 0%, transparent 20%),
+                      radial-gradient(circle at 90% 80%, rgba(0, 163, 255, 0.05) 0%, transparent 20%);
+}
 
-        const status = document.getElementById('status');
-        const btn = document.getElementById('generate-btn');
-        const progressBar = document.getElementById('progress-bar');
-        const audioPlayer = document.getElementById('audio-player');
+h1 {
+    font-size: 2.5rem;
+    font-weight: 700;
+    margin-bottom: 30px;
+    text-align: center;
+    background: linear-gradient(90deg, #fff, var(--primary-color));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    letter-spacing: -1px;
+}
 
-        let synthesizer = null;
+.container {
+    background: var(--card-bg);
+    padding: 40px;
+    border-radius: 24px;
+    width: 100%;
+    max-width: 600px;
+    box-shadow: var(--shadow);
+    border: 1px solid var(--border-color);
+    transition: transform 0.3s ease;
+}
 
-        // Tự động tải model
-        async function preloadModel() {
-            try {
-                status.textContent = "Đang tải mô hình AI (Khoảng 20MB)...";
-                
-                synthesizer = await pipeline('text-to-speech', 'Xenova/mms-tts-vie', {
-                    quantized: true,
-                    progress_callback: (data) => {
-                        if (data.status === 'progress') {
-                            const percent = Math.round(data.progress || 0);
-                            progressBar.style.width = percent + '%';
-                            if(percent < 100) status.textContent = `Đang tải tài nguyên: ${percent}%`;
-                        }
-                    }
-                });
+.container:hover {
+    border-color: #444;
+}
 
-                status.textContent = "Hệ thống sẵn sàng!";
-                status.style.color = "#00ffa3"; // Màu xanh khớp với CSS
-                btn.textContent = "🔊 Đọc văn bản ngay";
-                btn.disabled = false;
-                progressBar.style.width = '100%';
-                
-                // Ẩn thanh progress bar sau khi load xong cho gọn
-                setTimeout(() => { 
-                    document.querySelector('.progress-container').style.opacity = '0';
-                    document.querySelector('.progress-container').style.transition = 'opacity 1s';
-                }, 1000);
+label {
+    display: block;
+    margin-bottom: 10px;
+    font-weight: 600;
+    color: #aaa;
+    font-size: 0.9rem;
+}
 
-            } catch (err) {
-                console.error(err);
-                status.textContent = "Lỗi tải model: " + err.message;
-                status.style.color = "#ff4d4d";
-            }
-        }
+textarea {
+    width: 100%;
+    height: 120px;
+    background: #252525;
+    border: 2px solid var(--border-color);
+    color: white;
+    padding: 16px;
+    border-radius: 12px;
+    margin-bottom: 24px;
+    font-size: 16px;
+    line-height: 1.5;
+    resize: none;
+    font-family: inherit;
+    transition: all 0.2s ease;
+}
 
-        preloadModel();
+textarea:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    background: #2a2a2a;
+    box-shadow: 0 0 0 4px rgba(0, 255, 163, 0.1);
+}
 
-        window.generateSpeech = async function() {
-            const text = document.getElementById('text-input').value;
-            if (!text || !synthesizer) return;
+button {
+    background: var(--primary-color);
+    color: #000;
+    border: none;
+    padding: 16px;
+    font-weight: 700;
+    border-radius: 12px;
+    cursor: pointer;
+    width: 100%;
+    font-size: 16px;
+    transition: all 0.2s ease;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    position: relative;
+    overflow: hidden;
+}
 
-            btn.disabled = true;
-            btn.innerHTML = "⏳ Đang xử lý..."; // Thêm icon loading
-            status.textContent = "AI đang tạo âm thanh...";
-            status.style.color = "#aaa";
-            audioPlayer.style.display = 'none';
+button:hover:not(:disabled) {
+    background: var(--primary-hover);
+    transform: translateY(-2px);
+    box-shadow: 0 10px 20px -5px rgba(0, 255, 163, 0.4);
+}
 
-            try {
-                const output = await synthesizer(text);
-                
-                const wavUrl = createWavUrl(output.audio, output.sampling_rate);
-                audioPlayer.src = wavUrl;
-                audioPlayer.style.display = 'block';
-                await audioPlayer.play();
-                status.textContent = "Hoàn tất phát âm thanh.";
-                status.style.color = "#00ffa3";
+button:active:not(:disabled) {
+    transform: translateY(0);
+}
 
-            } catch (err) {
-                console.error(err);
-                status.textContent = "Lỗi xử lý: " + err.message;
-            } finally {
-                btn.disabled = false;
-                btn.textContent = "🔊 Đọc văn bản ngay";
-            }
-        };
+button:disabled {
+    background: #333;
+    color: #666;
+    cursor: not-allowed;
+    opacity: 0.8;
+}
 
-        function createWavUrl(audio, sampleRate) {
-            const buffer = new ArrayBuffer(44 + audio.length * 2);
-            const view = new DataView(buffer);
-            const writeString = (view, offset, string) => {
-                for (let i = 0; i < string.length; i++) view.setUint8(offset + i, string.charCodeAt(i));
-            };
-            writeString(view, 0, 'RIFF');
-            view.setUint32(4, 36 + audio.length * 2, true);
-            writeString(view, 8, 'WAVE');
-            writeString(view, 12, 'fmt ');
-            view.setUint32(16, 16, true);
-            view.setUint16(20, 1, true);
-            view.setUint16(22, 1, true);
-            view.setUint32(24, sampleRate, true);
-            view.setUint32(28, sampleRate * 2, true);
-            view.setUint16(32, 2, true);
-            view.setUint16(34, 16, true);
-            writeString(view, 36, 'data');
-            view.setUint32(40, audio.length * 2, true);
-            for (let i = 0; i < audio.length; i++) {
-                let s = Math.max(-1, Math.min(1, audio[i]));
-                view.setInt16(44 + i * 2, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
-            }
-            return URL.createObjectURL(new Blob([view], { type: 'audio/wav' }));
-        }
-    </script>
-</body>
-</html>
+/* Thanh tiến trình */
+.progress-container {
+    width: 100%;
+    background: #333;
+    height: 6px;
+    border-radius: 10px;
+    margin-top: 25px;
+    overflow: hidden;
+    position: relative;
+}
+
+.progress-bar {
+    height: 100%;
+    background: var(--primary-color);
+    width: 0%;
+    transition: width 0.3s ease;
+    border-radius: 10px;
+    box-shadow: 0 0 10px var(--primary-color);
+}
+
+.status {
+    margin-top: 12px;
+    font-size: 14px;
+    color: #888;
+    text-align: center;
+    font-weight: 500;
+    min-height: 20px;
+}
+
+/* Audio Player tùy chỉnh đơn giản */
+audio {
+    width: 100%;
+    margin-top: 25px;
+    display: none;
+    outline: none;
+    height: 40px;
+}
+
+/* Chỉnh màu cho audio player trên Chrome/Webkit */
+audio::-webkit-media-controls-panel {
+    background-color: #2a2a2a;
+}
+audio::-webkit-media-controls-current-time-display,
+audio::-webkit-media-controls-time-remaining-display {
+    color: #fff;
+}
